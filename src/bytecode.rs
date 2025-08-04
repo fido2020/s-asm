@@ -29,22 +29,23 @@ pub enum Opcode {
     Not = 0b00101,
     Shl = 0b00110,
     Shr = 0b00111,
-    Cmp = 0b01001,
     Lw = 0b10000,
     Sw = 0b11000,
-    Lb = 0b10001,
-    Sb = 0b11001,
     Branch = 0b11100,
     Jump = 0b11101,
+    JumpReg = 0b11111,
     Li = 0b10100
+    //Cmp = 0b01001,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     Nop,
     Alu(Opcode, u16, u16, u16),
     Mem(Opcode, u16, u16, u16),
     Branch(Condition, u16),
     Jump(u16),
+    JumpReg(u16),
     Li(u16, u16)
 }
 
@@ -77,7 +78,12 @@ pub fn encode_instruction(instr: Instruction) -> u16 {
             // ooooo ddd IIIIIIII
 
             assert!(val <= 0b11111111);
-            (Opcode::Li as u16) | (reg << 8) | (val)
+            ((Opcode::Li as u16) << 11) | (reg << 8) | (val)
+        },
+        Instruction::JumpReg(reg) => {
+            eprintln!("warn: jmp <reg> unimplemented");
+
+            ((Opcode::JumpReg as u16) << 11) | reg
         }
     }
 }

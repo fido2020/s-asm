@@ -87,7 +87,14 @@ pub fn parse_operand<'a>(input: &'a str) -> nom::IResult<&'a str, Operand> {
         },
         // Immediate
         |i| {
-            let (input, imm) = nom::character::complete::i32(i)?;
+            let (input, imm) = alt((
+                |input: &'a str|
+                    recognize(pair(tag("0x"), nom::character::complete::hex_digit1))
+                        .map_res(|s: &'a str| i32::from_str_radix(&s[2..], 16))
+                        .parse(input),
+                |input: &'a str|
+                    nom::character::complete::i32(input)
+            )).parse(i)?;
             Ok((input, Operand::Immediate(imm)))
         },
         // Label
@@ -127,4 +134,21 @@ pub fn parse_asm<'a>(input: &'a str) -> Result<Vec<AsmObject>, Box<dyn Error>> {
         .map_err(|e| e.to_owned())?;
 
     return Ok(objects);
+}
+
+mod tests {
+    use crate::parser::{parse_operand, Operand};
+
+    // Make sure hex numbers get parsed as operands correctly
+    #[test]
+    fn test_parse_hex_operand() {
+        let input = "0x1A";
+        let result = parse_operand(input);
+        assert!(result.is_ok());
+        let (_, operand) = result.unwrap();
+        match operand {
+            Operand::Immediate(value) => assert_eq!(value, 0x1A),
+            _ => panic!("Expected Immediate operand"),
+        }
+    }
 }

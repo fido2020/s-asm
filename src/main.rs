@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::{self, Write};
 
-use crate::bytecode::{encode_instruction, Condition, Instruction, Opcode};
-use crate::instruction::{check_convert_operands, name_to_opcode};
+use crate::bytecode::{encode_instruction, Condition, Instruction};
+use crate::instruction::{make_insns, name_to_op, PseudoInstruction};
 use crate::parser::{parse_operand, AsmObject, Operand};
 
-struct IncompleteInstruction(Opcode, Vec<Operand>);
+struct IncompleteInstruction(PseudoInstruction, Vec<Operand>);
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input = io::read_to_string(io::stdin())?;
@@ -36,11 +36,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut labels = HashMap::<String, u32>::new();
     let mut instructions = Vec::<IncompleteInstruction>::new();
+    let mut pc = 0;
     for obj in objects {
         match obj {
-            AsmObject::Instruction(name, operands) =>
+            AsmObject::Instruction(name, operands) => {
+                let op = name_to_op(name.as_str())?;
+                pc += op.length();
+
                 instructions.push(
-                    IncompleteInstruction(name_to_opcode(name.as_str())?.into(), operands.iter().map(
+                    IncompleteInstruction(op, operands.iter().map(
                         |op| {
                             if let Operand::Name(name) = op {
                                 if let Some(value) = constants.get(name) {
@@ -51,9 +55,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                             op.to_owned()
                         }
                     ).collect())
-                ),
+                )
+            },
             AsmObject::Label(name) => {
-                labels.insert( name, instructions.len() as u32);
+                labels.insert( name, pc);
             },
             _ =>
                 ()
@@ -90,28 +95,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             operands.push(op.unwrap());
         }
 
-        let checked_ops = 
-            check_convert_operands(instr.0, operands.as_slice())?;
+        let mut real_insns = 
+            make_insns(instr.0, operands.as_slice())?
+            .iter()
+            .map(|insn| encode_instruction(*insn))
+            .collect::<Vec<u16>>();
 
-        let opcode = instr.0;
-
-        let to_encode = match opcode {
-            Opcode::Add | Opcode::Sub | Opcode::Cmp | Opcode::And | Opcode::Or | Opcode::Xor
-                    | Opcode::Not | Opcode::Shl | Opcode::Shr =>
-                Instruction::Alu(opcode, checked_ops[0], checked_ops[1], checked_ops[2]),
-            Opcode::Lw | Opcode::Sw | Opcode::Lb | Opcode::Sb =>
-                Instruction::Mem(opcode, checked_ops[0], checked_ops[1], checked_ops[2]),
-            Opcode::Branch =>
-                Instruction::Branch(Condition::Equal, checked_ops[0]),
-            Opcode::Jump =>
-                Instruction::Jump(checked_ops[0]),
-            Opcode::Li =>
-                Instruction::Li(checked_ops[0], checked_ops[1])
-        };
-
-        let encoded = encode_instruction(to_encode);
-
-        bytecode.push(encoded);
+        bytecode.append(&mut real_insns);
     }
 
     for insn in bytecode {
