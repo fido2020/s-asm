@@ -40,6 +40,10 @@ pub enum PseudoInstruction {
 }
 
 impl PseudoInstruction {
+    pub fn is_branch(&self) -> bool {
+        matches!(self, PseudoInstruction::Beq | PseudoInstruction::Bne | PseudoInstruction::Blt | PseudoInstruction::Bge)
+    }
+
     pub fn length(&self) -> u32 {
         // Push and pop expand to a sub/add and a load/store
         
@@ -151,7 +155,7 @@ fn do_convert_operands(opcode: PseudoInstruction, defn: &[OperandType], operands
                             eprintln!("Warning: truncating {} to {}-bits", val, bits);
                         }
 
-                        Ok((*val & (1 << bits - 1)) as u16)
+                        Ok((*val & ((1 << bits) - 1)) as u16)
                     }
                     invalid => Err(invalid.to_string())
                 }
@@ -213,6 +217,7 @@ pub fn make_single_insn(op: PseudoInstruction, operands: &[Operand]) -> Result<I
         PseudoInstruction::Li => {
             let [reg, val] = do_convert_operands(op, &[OperandType::RegLo, OperandType::Imm(8)], operands)?[..]
                 else { unreachable!() };
+
             Ok(Instruction::Li(reg, val))
         },
         _ => unreachable!()
@@ -220,6 +225,8 @@ pub fn make_single_insn(op: PseudoInstruction, operands: &[Operand]) -> Result<I
 }
 
 pub fn make_insns(op: PseudoInstruction, operands: &[Operand]) -> Result<Vec<Instruction>, InvalidOperands> {
+    eprintln!("make_insns: {:?} {:?}", op, operands);
+    
     match op {
         PseudoInstruction::Push => {
             // Push expands to a sub/add and a load/store
@@ -227,8 +234,8 @@ pub fn make_insns(op: PseudoInstruction, operands: &[Operand]) -> Result<Vec<Ins
                 else { unreachable!() };
 
             Ok(vec![
-                Instruction::Li(1, 4), // li r1, 1
-                Instruction::Alu(Opcode::Sub, 15, 15, 1), // Sub r15, r15, r1
+                Instruction::Li(7, 4), // li r7, 4
+                Instruction::Alu(Opcode::Sub, 15, 15, 7), // Sub r15, r15, r7
                 Instruction::Mem(Opcode::Sw, reg, 15, 0)
             ])
         },
@@ -239,8 +246,8 @@ pub fn make_insns(op: PseudoInstruction, operands: &[Operand]) -> Result<Vec<Ins
 
             Ok(vec![
                 Instruction::Mem(Opcode::Lw, reg, 15, 0),
-                Instruction::Li(1, 4), // li r1, 4
-                Instruction::Alu(Opcode::Add, 15, 15, 1) // Add r15, r15, r1
+                Instruction::Li(7, 4), // li r7, 4
+                Instruction::Alu(Opcode::Add, 15, 15, 7) // Add r15, r15, r7
             ])
         }
         simple_op =>

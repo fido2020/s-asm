@@ -4,19 +4,16 @@ mod instruction;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 
-use crate::bytecode::{encode_instruction, Condition, Instruction};
+use crate::bytecode::{disassemble, encode_instruction, Condition, Instruction};
 use crate::instruction::{make_insns, name_to_op, PseudoInstruction};
 use crate::parser::{parse_operand, AsmObject, Operand};
 
 struct IncompleteInstruction(PseudoInstruction, Vec<Operand>);
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = io::read_to_string(io::stdin())?;
-    let as_str = input.as_str();
-
-    let objects = parser::parse_asm(as_str)?;
+fn assemble(input: &str) -> Result<(), Box<dyn Error>> {
+    let objects = parser::parse_asm(input)?;
 
     let mut constants = HashMap::<String, String>::new();
     
@@ -83,7 +80,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     // Get the offset from this insn to the label,
                     // include the one instruction offset
-                    Ok(Operand::Immediate((idx as i32) - (*label_addr as i32) + 1))
+                    let off = (idx as i32) - (*label_addr as i32) + 1;
+
+                    let mut value = (*label_addr) as i32;
+                    // If the op is PseudoInstruction::Branch, we need the offset
+                    if instr.0.is_branch() {
+                        value = off as i32;
+                    }
+
+                    Ok(Operand::Immediate(value))
                 },
                 op => Ok(op.clone())
             }) {
@@ -109,6 +114,33 @@ fn main() -> Result<(), Box<dyn Error>> {
             (insn >> 8) as u8, (insn & 0xff) as u8
         ])?;
     }
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    // check for disasm cmd line flag
+    if std::env::args().any(|arg| arg == "--disasm") {
+        let bytes = io::stdin().bytes()
+            .map(|b| b.unwrap())
+            .collect::<Vec<u8>>();
+
+        if bytes.len() % 2 != 0 {
+            eprintln!("Error: Bytecode length is not a multiple of 2");
+            return Err("Bytecode length is not a multiple of 2".into());
+        }
+
+        let mut pc = 0;
+        for chunk in bytes.chunks(2) {
+            let insn = u16::from_be_bytes([chunk[0], chunk[1]]);
+            disassemble(insn);
+        }
+
+        return Ok(())
+    }
+
+    let input = io::read_to_string(io::stdin())?;
+    assemble(&input)?;
 
     Ok(())
 }

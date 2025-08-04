@@ -38,6 +38,48 @@ pub enum Opcode {
     //Cmp = 0b01001,
 }
 
+fn opcode_to_enum(opcode: u16) -> Result<Opcode, InvalidInstruction> {
+    match opcode {
+        0b00000 => Ok(Opcode::Add),
+        0b00001 => Ok(Opcode::Sub),
+        0b00010 => Ok(Opcode::Or),
+        0b00011 => Ok(Opcode::And),
+        0b00100 => Ok(Opcode::Xor),
+        0b00101 => Ok(Opcode::Not),
+        0b00110 => Ok(Opcode::Shl),
+        0b00111 => Ok(Opcode::Shr),
+        0b10000 => Ok(Opcode::Lw),
+        0b11000 => Ok(Opcode::Sw),
+        0b11100 => Ok(Opcode::Branch),
+        0b11101 => Ok(Opcode::Jump),
+        0b11111 => Ok(Opcode::JumpReg),
+        0b10100 => Ok(Opcode::Li),
+        _ => Err(InvalidInstruction(format!("Unknown opcode: {:#06x}", opcode)))
+    }
+}
+
+impl std::fmt::Display for Opcode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Opcode::Add => "add",
+            Opcode::Sub => "sub",
+            Opcode::Or => "or",
+            Opcode::And => "and",
+            Opcode::Xor => "xor",
+            Opcode::Not => "not",
+            Opcode::Shl => "shl",
+            Opcode::Shr => "shr",
+            Opcode::Lw => "lw",
+            Opcode::Sw => "sw",
+            Opcode::Branch => "branch",
+            Opcode::Jump => "jmp(i)",
+            Opcode::JumpReg => "jmp(r)",
+            Opcode::Li => "li"
+        };
+        write!(f, "{}", name)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     Nop,
@@ -52,7 +94,7 @@ pub enum Instruction {
 fn encode_alu_instruction(opcode: Opcode, rd: u16, rt: u16, rs: u16) -> u16 {
     assert!(rs < 8);
 
-    ((opcode as u16) << 11) | ((rs as u16) << 8) | ((rs as u16) << 4) | rd as u16
+    ((opcode as u16) << 11) | ((rs as u16) << 8) | ((rt as u16) << 4) | rd as u16
 }
 
 fn encode_mem_instruction(opcode: Opcode, rd: u16, rt: u16, off: u16) -> u16 {
@@ -84,6 +126,39 @@ pub fn encode_instruction(instr: Instruction) -> u16 {
             eprintln!("warn: jmp <reg> unimplemented");
 
             ((Opcode::JumpReg as u16) << 11) | reg
+        }
+    }
+}
+
+pub fn disassemble(instr: u16) {
+    let opcode = (instr >> 11) & 0b11111;
+    let rs = (instr >> 8) & 0b111;
+    let rt = (instr >> 4) & 0b1111;
+    let rd = instr & 0b1111;
+    let mem_off = (instr >> 8) & 0b111;
+    let off = instr & 0b111111111;
+    let imm = instr & 0b11111111;
+    let cond = (instr >> 9) & 0b11;
+    let opcode = opcode_to_enum(opcode).unwrap();
+
+    match opcode {
+        Opcode::Add | Opcode::Sub | Opcode::Or | Opcode::And | Opcode::Xor | Opcode::Not | Opcode::Shl | Opcode::Shr => {
+            println!("{} r{}, r{}, r{}", opcode, rd, rt, rs);
+        },
+        Opcode::Lw | Opcode::Sw => {
+            println!("{} r{}, r{}, {}", opcode, rd, rt, mem_off);
+        },
+        Opcode::Branch => {
+            println!("{} {} r{}, {}", cond, opcode, rt, off);
+        },
+        Opcode::Jump => {
+            println!("{} {}", opcode, off);
+        },
+        Opcode::JumpReg => {
+            println!("jmp r{}", rd);
+        },
+        Opcode::Li => {
+            println!("{} r{}, {}", opcode, rs, imm);
         }
     }
 }
