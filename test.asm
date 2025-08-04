@@ -14,17 +14,17 @@ BLOCK_SIZE=8
 
 validate_record:
     # Record in r8
-    li  r8, 0 # 
-    li  r9, 0 # block shift amt
-    li  r15, TAG_BITMASK
+    add  r8, r0, r0 # 
+    add  r1, r0, r0 # block shift amt
+    li  r2, TAG_BITMASK
 
-    shr r10, r8, r9
-    and r10, r10, r15
+    shr r10, r8, r1
+    and r10, r10, r2
 
     # block is now in r10
     
-
-    add r9, TAG_SIZE
+    li  r7, TAG_SIZE
+    add r1, r1, r7
 
 init_tallies:
     li  r1, 0 # Candidate 1

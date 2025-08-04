@@ -9,29 +9,27 @@ enum Segment {
     Data
 }
 
-#[derive(Debug)]
-enum Operand {
+#[derive(Debug, Clone)]
+pub enum Operand {
     Register(u8),
     Immediate(i32),
-    Label(String),
+    Name(String),
+}
+
+impl std::fmt::Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let val = match self {
+            Operand::Immediate(imm) => imm.to_string(),
+            Operand::Name(name) => name.to_string(),
+            Operand::Register(reg) => reg.to_string()
+        };
+        
+        write!(f, "{}", val)
+    }
 }
 
 #[derive(Debug)]
-struct Label(String, Segment, usize);
-
-#[derive(Debug)]
-struct Instruction(String, Vec<Operand>);
-#[derive(Debug)]
-struct Directive(String, Vec<Operand>);
-
-#[derive(Debug)]
-struct AsmFile {
-    instructions: Vec<Instruction>,
-    labels: Vec<Label>,
-}
-
-#[derive(Debug)]
-enum AsmObject {
+pub enum AsmObject {
     Instruction(String, Vec<Operand>),
     Label(String),
     Directive(String, Vec<Operand>),
@@ -63,7 +61,7 @@ fn parse_name<'a>(input: &'a str) -> nom::IResult<&'a str, &str> {
 
 fn parse_label<'a>(input: &'a str) -> nom::IResult<&'a str, AsmObject> {
     // Labels must start with _a-zA-Z and can contain _a-zA-Z0-9
-    let (input, (label, colon)) = pair(
+    let (input, (label, _colon)) = pair(
         parse_name,
         tag(":")
     ).parse(input)?;
@@ -79,7 +77,7 @@ fn parse_constant<'a>(input: &'a str) -> nom::IResult<&'a str, AsmObject> {
     return Ok((input, AsmObject::Constant(name.into(), value.into())));
 }
 
-fn parse_operand<'a>(input: &'a str) -> nom::IResult<&'a str, Operand> {
+pub fn parse_operand<'a>(input: &'a str) -> nom::IResult<&'a str, Operand> {
     alt((
         // Register
         |i: &'a str| {
@@ -95,7 +93,7 @@ fn parse_operand<'a>(input: &'a str) -> nom::IResult<&'a str, Operand> {
         // Label
         |i| {
             let (input, label) = parse_name(i)?;
-            Ok((input, Operand::Label(label.to_string())))
+            Ok((input, Operand::Name(label.to_string())))
         }
     )).parse(input)
 }
@@ -120,16 +118,13 @@ pub fn parse_comment_whitespace(input: &str) -> nom::IResult<&str, &str> {
     return Ok((input, ""))
 }
 
-pub fn parse_asm<'a>(input: &'a str) -> Result<(), Box<dyn Error>> {
-    let (input, objects) = many0(delimited(parse_comment_whitespace, alt((
+pub fn parse_asm<'a>(input: &'a str) -> Result<Vec<AsmObject>, Box<dyn Error>> {
+    let (_input, objects) = many0(delimited(parse_comment_whitespace, alt((
         parse_constant,
         parse_label,
         parse_instruction,
     )), parse_comment_whitespace)).parse(input)
-        .map_err(|e| "Error")?;
+        .map_err(|e| e.to_owned())?;
 
-    println!("{:?}", objects);
-    println!("{:?}", input);
-
-    return Ok(());
+    return Ok(objects);
 }
